@@ -37,12 +37,14 @@ def trim_white_runs(runs):
 
 
 def estimate_module_width(runs):
-    lengths = [length for _, length in runs]
+    lengths = sorted(length for _, length in runs)
 
     if not lengths:
         raise ValueError("Nincs run-length adat.")
 
-    return min(lengths)
+    small_lengths = lengths[:max(3, len(lengths) // 4)]
+
+    return sum(small_lengths) / len(small_lengths)
 
 
 def runs_to_bits(runs, module_width):
