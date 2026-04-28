@@ -1,10 +1,11 @@
 import cv2
-from collections import Counter
+from collections import defaultdict
 
-from lib.image_processing import load_image, to_grayscale, binarize
+from lib.image_processing import load_image, to_grayscale, binarize_otsu, binarize_adaptive
 from lib.barcode_detection import detect_barcode_candidates
 from lib.scanline import scanline_to_runs, trim_white_runs, runs_to_bits
 from lib.decoder import decode_ean13_bits
+from lib.pattern_decoder import decode_ean13_from_runs
 
 
 def estimate_module_width_from_total(runs):
@@ -50,39 +51,69 @@ def is_valid_ean_structure(bits: str) -> bool:
     return True
 
 
-def try_decode_scanline(scanline) -> str:
+def try_decode_scanline(scanline):
     runs = scanline_to_runs(scanline)
     runs = trim_white_runs(runs)
 
-    module_width = estimate_module_width_from_total(runs)
-    bits = runs_to_bits(runs, module_width)
+    # run decoder
+    try:
+        result, score = decode_ean13_from_runs(runs)
 
-    if len(bits) < 80:
-        raise ValueError("Túl rövid")
+        # minél kisebb a score, annál jobb
+        confidence = 1 / (1 + score)
 
-    bits = normalize_to_95_bits(bits)
+        return result, confidence
 
-    if not is_valid_ean_structure(bits):
-        raise ValueError("Guard pattern fail")
+    except Exception:
+        pass
 
-    return decode_ean13_bits(bits)
+    # fallback
+    try:
+        module_width = estimate_module_width_from_total(runs)
+        bits = runs_to_bits(runs, module_width)
+
+        if len(bits) < 80:
+            return None
+
+        bits = normalize_to_95_bits(bits)
+
+        if not is_valid_ean_structure(bits):
+            return None
+
+        result = decode_ean13_bits(bits)
+
+        return result, 0.3  # fallback gyengébb
+
+    except Exception:
+        return None
 
 
-def try_decode_roi(roi) -> list[str]:
+def try_decode_roi(roi):
     gray = to_grayscale(roi)
-    binary = binarize(gray)
 
-    height = binary.shape[0]
+    binaries = [
+        binarize_adaptive(gray),
+        binarize_otsu(gray),
+    ]
+
     results = []
+    band_height = 3
 
-    for y in get_scan_y_positions(height, count=40):
-        scanline = binary[y, :]
+    for binary in binaries:
+        height = binary.shape[0]
 
-        try:
-            result = try_decode_scanline(scanline)
-            results.append(result)
-        except Exception:
-            pass
+        for y in get_scan_y_positions(height, count=80):
+            y1 = max(0, y - band_height // 2)
+            y2 = min(height, y + band_height // 2 + 1)
+
+            band = binary[y1:y2, :]
+
+            scanline = band.mean(axis=0)
+
+            res = try_decode_scanline(scanline)
+
+            if res:
+                results.append(res)
 
     return results
 
@@ -99,21 +130,20 @@ def generate_image_variants(image):
 def read_ean13_from_image(path: str) -> str:
     image = load_image(path)
 
-    all_results = []
+    score_map = defaultdict(float)
 
     for variant in generate_image_variants(image):
         rois = detect_barcode_candidates(variant, max_candidates=8)
 
         for roi in rois:
-            all_results.extend(try_decode_roi(roi))
+            results = try_decode_roi(roi)
 
-    if not all_results:
+            for value, confidence in results:
+                score_map[value] += confidence
+
+    if not score_map:
         raise ValueError("Nem sikerült olvasni")
 
-    counts = Counter(all_results)
-    best, count = counts.most_common(1)[0]
+    best = max(score_map.items(), key=lambda x: x[1])
 
-    if count < 3:
-        raise ValueError(f"Túl bizonytalan eredmény: {best} ({count}x)")
-
-    return best
+    return best[0]
