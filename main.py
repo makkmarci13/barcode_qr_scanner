@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from lib.barcode_reader import read_ean13_from_image
 
@@ -35,30 +36,22 @@ def expected_ean_from_filename(path: Path) -> str | None:
     return None
 
 
-def test_single_image(image_path: Path) -> bool:
+def test_single_image(image_path: Path) -> tuple[bool, str]:
     expected = expected_ean_from_filename(image_path)
 
     try:
         result = read_ean13_from_image(str(image_path))
 
         if expected is None:
-            print(f"{YELLOW}[?]{RESET} {image_path.name} -> EAN-13: {result} / nincs elvárt érték a fájlnévben")
-            return True
+            return True, f"{YELLOW}[?]{RESET} {image_path.name} -> {result}"
 
         if result == expected:
-            print(f"{GREEN}[OK]{RESET} {image_path.name} -> {result}")
-            return True
+            return True, f"{GREEN}[OK]{RESET} {image_path.name} -> {result}"
 
-        print(f"{RED}[ROSSZ]{RESET} {image_path.name} -> olvasott: {result}, elvárt: {expected}")
-        return False
+        return False, f"{RED}[ROSSZ]{RESET} {image_path.name} -> {result} != {expected}"
 
     except Exception as error:
-        if expected:
-            print(f"{RED}[HIBA]{RESET} {image_path.name} -> elvárt: {expected}, hiba: {error}")
-        else:
-            print(f"{RED}[HIBA]{RESET} {image_path.name} -> {error}")
-
-        return False
+        return False, f"{RED}[HIBA]{RESET} {image_path.name} -> {error}"
 
 
 def test_folder(folder: Path) -> None:
@@ -76,13 +69,17 @@ def test_folder(folder: Path) -> None:
     ok_count = 0
     fail_count = 0
 
-    for image_path in images:
-        success = test_single_image(image_path)
+    with ProcessPoolExecutor() as executor:
+        futures = {executor.submit(test_single_image, path): path for path in images}
 
-        if success:
-            ok_count += 1
-        else:
-            fail_count += 1
+        for future in as_completed(futures):
+            success, message = future.result()
+            print(message)
+
+            if success:
+                ok_count += 1
+            else:
+                fail_count += 1
 
     print()
     print("Összesítés:")
@@ -101,7 +98,8 @@ def main():
         if path.is_dir():
             test_folder(path)
         elif path.is_file():
-            success = test_single_image(path)
+            success, message = test_single_image(path)
+            print(message)
             sys.exit(0 if success else 1)
         else:
             print(f"{RED}Nem létezik: {path}{RESET}")
