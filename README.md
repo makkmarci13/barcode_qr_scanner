@@ -1,4 +1,4 @@
-# Barcode & QR Code processor
+# <u>Barcode</u> & QR Code processor
 
 ## Folyamatok leírása
 
@@ -22,3 +22,7 @@ TODO...
 ```
 TODO...
 ```
+
+## Tesztelés
+
+Használt adatforrás: [DEAL KAIST Lab Barcode Dataser](https://www.kaggle.com/datasets/s0dium/deal-kaist-lab-barcode-main/data)
