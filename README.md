@@ -13,8 +13,24 @@ TODO...
 
 ## Használata
 
+### Általános használat
+
+```bash
+source .venv/bin/activate
+python main.py [kép / mappa]
 ```
-TODO...
+
+### Egyetlen fájl dekódolása példa
+
+```bash
+python main.py tests/images/0037000867821.jpg
+```
+
+### Mappák dekódolása példa
+
+```bash
+python main.py tests/images/rec
+python main.py tests/images/single_test
 ```
 
 ## Dokumentáció
