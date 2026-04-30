@@ -66,6 +66,9 @@ def test_folder(folder: Path) -> None:
         print(f"{RED}Nincs kép ebben a mappában: {folder}{RESET}")
         sys.exit(1)
 
+    total = len(images)
+    done = 0
+
     ok_count = 0
     fail_count = 0
 
@@ -73,8 +76,10 @@ def test_folder(folder: Path) -> None:
         futures = {executor.submit(test_single_image, path): path for path in images}
 
         for future in as_completed(futures):
+            done += 1
+
             success, message = future.result()
-            print(message)
+            print(f"[{done}/{total}] {message}")
 
             if success:
                 ok_count += 1

@@ -3,6 +3,7 @@ import numpy as np
 
 
 def detect_barcode_candidates(image, max_candidates=5):
+    # Szürkeárnyalatossá transzformálás
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     candidates = []
@@ -13,12 +14,20 @@ def detect_barcode_candidates(image, max_candidates=5):
         (45, 11),
     ]
 
+    gray = np.asarray(gray, dtype=np.uint8)
+    erode_dilate_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+
     for kernel_size in kernel_sizes:
+        # Éldetektálás sobel filterrel
         grad_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=-1)
+
+        # Mivel a sobel értéke lehet negatív is, ezért abszolútértéket kell venni
         grad_x = cv2.convertScaleAbs(grad_x)
 
+        # Zaj simítása
         blurred = cv2.GaussianBlur(grad_x, (9, 9), 0)
 
+        # Fekete, fehér képpé alakítás
         _, thresh = cv2.threshold(
             blurred,
             0,
@@ -26,12 +35,19 @@ def detect_barcode_candidates(image, max_candidates=5):
             cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
 
+        # Kernel készítése
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+
+        # Közeli fehér részek összekötése, sok különálló fehér csíkból egy blokk lesz
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
 
-        closed = cv2.erode(closed, None, iterations=1)
-        closed = cv2.dilate(closed, None, iterations=2)
+        # Fehér területekből kicsi visszavevés
+        closed = cv2.erode(closed, erode_dilate_kernel, iterations=1)
 
+        # Fehér területek tágítása
+        closed = cv2.dilate(closed, erode_dilate_kernel, iterations=2)
+
+        # Kontúrok keresése
         contours, _ = cv2.findContours(
             closed,
             cv2.RETR_EXTERNAL,

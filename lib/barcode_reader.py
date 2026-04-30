@@ -27,8 +27,8 @@ def normalize_to_95_bits(bits: str) -> str:
 
 
 def get_scan_y_positions(height, count=40):
-    start = int(height * 0.15)
-    end = int(height * 0.60)
+    start = 0
+    end = height - 1
 
     step = (end - start) / max(1, count - 1)
 
@@ -118,6 +118,7 @@ def try_decode_roi(roi):
     return results
 
 
+# Kép forgatása az alábbi fokokban: 0, 90, 180, 270
 def generate_image_variants(image):
     return [
         image,
@@ -133,7 +134,7 @@ def read_ean13_from_image(path: str) -> str:
     score_map = defaultdict(float)
 
     for variant in generate_image_variants(image):
-        rois = detect_barcode_candidates(variant, max_candidates=8)
+        rois = detect_barcode_candidates(variant, max_candidates=15)
 
         for roi in rois:
             results = try_decode_roi(roi)
