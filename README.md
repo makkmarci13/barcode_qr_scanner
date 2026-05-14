@@ -2,7 +2,7 @@
 
 ## Folyamatok leírása
 
-- [Barcode folyamat](https://github.com/makkmarci13/barcode_qr_scanner/blob/development/docs/Barcode.md)
+- [Barcode folyamat](https://github.com/makkmarci13/barcode_qr_scanner/blob/development/docs/Barcode.md) - Ez lett kidolgozva
 - [QR code folyamat](https://github.com/makkmarci13/barcode_qr_scanner/blob/development/docs/QR.md)
 
 ## Használata
@@ -33,6 +33,7 @@ python main.py tests/images/single_test
 TODO...
 ```
 
-## Tesztelés
+## Tesztelés & Statisztika
 
-Használt adatforrás: [DEAL KAIST Lab Barcode Dataser](https://www.kaggle.com/datasets/s0dium/deal-kaist-lab-barcode-main/data)
+- Használt adatforrás: [DEAL KAIST Lab Barcode Dataser](https://www.kaggle.com/datasets/s0dium/deal-kaist-lab-barcode-main/data)
+- [Statisztika generálása](https://github.com/makkmarci13/barcode_qr_scanner/blob/development/STATISTICS_USAGE.md)
