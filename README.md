@@ -29,9 +29,7 @@ python main.py tests/images/single_test
 
 ## Dokumentáció
 
-```
-TODO...
-```
+- [Dokumentáció](https://github.com/makkmarci13/barcode_qr_scanner/blob/development/documentation.pdf)
 
 ## Tesztelés & Statisztika
 
