@@ -87,8 +87,112 @@ def detect_barcode_candidates(image, max_candidates=5):
         roi = crop_rotated_rect(image, candidate["rect"], padding=0.20)
         rois.append(roi)
 
+    # Fallback: a klasszikus Sobel+minAreaRect detektor néha nem találja meg a
+    # függőlegesen álló / címkébe ágyazott vonalkódot. Ilyenkor sötét, hosszú
+    # vonalakból próbálunk egy közvetlen, tengelyhez igazított kivágást készíteni.
+    for roi in detect_dark_vertical_barcode_candidates(image, max_candidates=max_candidates):
+        rois.append(roi)
+
+    return deduplicate_rois(rois, max_candidates=max_candidates)
+
+
+
+def detect_dark_vertical_barcode_candidates(image, max_candidates=5):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Fekete elemek kiemelése. A barcode sávjai általában hosszú, vékony,
+    # egymáshoz közeli sötét vonalak; a szöveg kisebb komponensekre esik szét.
+    binary = cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        31,
+        15,
+    )
+
+    h, w = binary.shape[:2]
+    vertical_len = max(18, min(55, h // 25))
+
+    # A betűk nagy részét eltüntetjük, a hosszú barcode-sávok megmaradnak.
+    opened = cv2.morphologyEx(
+        binary,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_len)),
+    )
+
+    # A közeli barcode-sávokat egy blokká kötjük.
+    closed = cv2.morphologyEx(
+        opened,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (45, 15)),
+    )
+
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    candidates = []
+    image_area = max(1, h * w)
+
+    for contour in contours:
+        x, y, bw, bh = cv2.boundingRect(contour)
+
+        if bw < 35 or bh < 70:
+            continue
+
+        area = bw * bh
+        if area < image_area * 0.002:
+            continue
+
+        # A fallback célzottan a magasabb, keskenyebb barcode-blokkokat keresi.
+        # Nem túl szigorú, mert a perspektíva és a csomagolás görbülete torzíthat.
+        ratio = max(bw, bh) / max(1, min(bw, bh))
+        if ratio < 1.5:
+            continue
+
+        score = area * ratio
+        candidates.append((score, x, y, bw, bh))
+
+    candidates.sort(reverse=True)
+
+    rois = []
+    for _, x, y, bw, bh in candidates[:max_candidates]:
+        pad_x = int(bw * 0.90)
+        pad_y = int(bh * 0.18)
+
+        x1 = max(0, x - pad_x)
+        y1 = max(0, y - pad_y)
+        x2 = min(w, x + bw + pad_x)
+        y2 = min(h, y + bh + pad_y)
+
+        roi = image[y1:y2, x1:x2]
+        if roi.size > 0:
+            rois.append(roi)
+
     return rois
 
+
+def deduplicate_rois(rois, max_candidates=20):
+    unique = []
+    seen = set()
+
+    for roi in rois:
+        if roi is None or roi.size == 0:
+            continue
+
+        shape_key = roi.shape[:2]
+        # Durva deduplikáció: ugyanabból a kontúrból sok kernelméret mellett
+        # majdnem azonos ROI jöhetne létre.
+        key = (round(shape_key[0] / 10), round(shape_key[1] / 10))
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique.append(roi)
+
+        if len(unique) >= max_candidates:
+            break
+
+    return unique
 
 def crop_rotated_rect(image, rect, padding=0.15):
     (cx, cy), (w, h), angle = rect

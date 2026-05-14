@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from lib.barcode_reader import read_ean13_from_image
+from lib.barcode_reader import BarcodeReadError, read_ean13_from_image
 
 IMAGE_DIR = Path("tests/images")
 
@@ -36,22 +36,41 @@ def expected_ean_from_filename(path: Path) -> str | None:
     return None
 
 
+def _format_debug(debug: dict) -> str:
+    alternatives = debug.get("alternatives") or []
+    alt_text = ""
+    if alternatives:
+        alt_text = " | alternatívák: " + ", ".join(f"{value}({score:.2f})" for value, score in alternatives[:3])
+
+    return (
+        f"score={debug.get('score', 0):.2f}, "
+        f"találatok={debug.get('hits', 0)}, "
+        f"ROI={debug.get('roi_count', 0)}, "
+        f"módszer={debug.get('methods', {})}"
+        f"{alt_text}"
+    )
+
+
 def test_single_image(image_path: Path) -> tuple[bool, str]:
     expected = expected_ean_from_filename(image_path)
 
     try:
-        result = read_ean13_from_image(str(image_path))
+        debug = read_ean13_from_image(str(image_path), return_debug=True)
+        result = debug["value"]
+        debug_text = _format_debug(debug)
 
         if expected is None:
-            return True, f"{YELLOW}[?]{RESET} {image_path.name} -> {result}"
+            return True, f"{YELLOW}[?]{RESET} {image_path.name} -> {result} ({debug_text})"
 
         if result == expected:
-            return True, f"{GREEN}[OK]{RESET} {image_path.name} -> {result}"
+            return True, f"{GREEN}[OK]{RESET} {image_path.name} -> {result} ({debug_text})"
 
-        return False, f"{RED}[ROSSZ]{RESET} {image_path.name} -> {result} != {expected}"
+        return False, f"{RED}[ROSSZ]{RESET} {image_path.name} -> {result} != {expected} ({debug_text})"
 
-    except Exception as error:
+    except BarcodeReadError as error:
         return False, f"{RED}[HIBA]{RESET} {image_path.name} -> {error}"
+    except Exception as error:
+        return False, f"{RED}[HIBA]{RESET} {image_path.name} -> váratlan hiba: {error}"
 
 
 def test_folder(folder: Path) -> None:
